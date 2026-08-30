@@ -2,20 +2,19 @@ import random
 import tkinter as tk
 
 class VisualGridHuntGame:
-    """A flexible Pacman-style grid environment with support for configurable opponents and larger scales."""
+    """A flexible Pacman-style grid environment updated for Partial Observability."""
 
     def __init__(self, width=10, height=10, num_food=10, num_opponents=2, custom_walls=None, num_traps=3):
         self.width = width
         self.height = height
         self.agent_pos = [0, 0]  # Starting position (x, y)
+        self.agent_facing = 'Up' # Added for Practical 2: Tracks which way the agent looks
 
         if custom_walls is not None:
             self.walls = set(custom_walls)
         else:
-            # Generate some default scattered walls for a larger grid
             self.walls = {(2, 2), (2, 3), (5, 5), (6, 5), (3, 7)}
 
-        # Dynamically generate random food positions avoiding walls and agent start
         self.food_positions = set()
         while len(self.food_positions) < num_food:
             fx = random.randint(0, self.width - 1)
@@ -24,7 +23,6 @@ class VisualGridHuntGame:
             if pos_tuple != (0, 0) and pos_tuple not in self.walls:
                 self.food_positions.add(pos_tuple)
 
-        # Generate adversarial opponents
         self.opponents = []
         while len(self.opponents) < num_opponents:
             ox = random.randint(0, self.width - 1)
@@ -33,13 +31,11 @@ class VisualGridHuntGame:
             if tuple(op_pos) != (0, 0) and tuple(op_pos) not in self.walls and tuple(op_pos) not in self.food_positions:
                 self.opponents.append(op_pos)
 
-        # STEP 2.1: Declare and populate toxic traps
         self.toxic_traps = set()
         while len(self.toxic_traps) < num_traps:
             tx = random.randint(0, self.width - 1)
             ty = random.randint(0, self.height - 1)
             trap_pos = (tx, ty)
-            # Avoid placing traps on start, walls, food, or opponents
             if trap_pos != (0, 0) and trap_pos not in self.walls and trap_pos not in self.food_positions and list(trap_pos) not in self.opponents:
                 self.toxic_traps.add(trap_pos)
 
@@ -48,41 +44,57 @@ class VisualGridHuntGame:
         self.collision = False
 
     def get_percept(self) -> dict:
+        """Step 1.1: Partially Observable Percepts"""
+        ax, ay = self.agent_pos
+        
+        # Calculate the coordinates of the cell directly in front of the agent
+        if self.agent_facing == 'Up':
+            ahead_pos = (ax, ay + 1)
+        elif self.agent_facing == 'Down':
+            ahead_pos = (ax, ay - 1)
+        elif self.agent_facing == 'Left':
+            ahead_pos = (ax - 1, ay)
+        else: # Right
+            ahead_pos = (ax + 1, ay)
+            
+        # Check if the cell ahead is a wall or out of bounds
+        wall_ahead = ahead_pos in self.walls or not (0 <= ahead_pos[0] < self.width and 0 <= ahead_pos[1] < self.height)
+        
+        # The agent only knows local, immediate data now
         return {
-            'agent_pos': list(self.agent_pos),
-            'opponent_positions': [list(op) for op in self.opponents],
-            'smells_food': tuple(self.agent_pos) in self.food_positions,
-            'hit_wall': tuple(self.agent_pos) in self.walls,
-            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps, # STEP 2.2: Add smells_toxin sensor key
-            'collision': self.collision,
-            'score': self.score,
-            'remaining_food': len(self.food_positions)
+            'wall_ahead': wall_ahead,
+            'food_here': tuple(self.agent_pos) in self.food_positions
         }
 
     def execute_action(self, action: str):
         self.steps += 1
         new_pos = list(self.agent_pos)
 
+        # Update facing direction before moving
+        if action in ['Up', 'Down', 'Left', 'Right']:
+            self.agent_facing = action
+            
         if action == 'Up':
-            new_pos[1] = min(self.height - 1, new_pos[1] + 1)
+            new_pos[1] += 1
         elif action == 'Down':
-            new_pos[1] = max(0, new_pos[1] - 1)
+            new_pos[1] -= 1
         elif action == 'Left':
-            new_pos[0] = max(0, new_pos[0] - 1)
+            new_pos[0] -= 1
         elif action == 'Right':
-            new_pos[0] = min(self.width - 1, new_pos[0] + 1)
+            new_pos[0] += 1
 
-        if tuple(new_pos) in self.walls:
+        # Process movement and walls
+        if tuple(new_pos) in self.walls or not (0 <= new_pos[0] < self.width and 0 <= new_pos[1] < self.height):
             self.score -= 5
         else:
-            self.agent_pos = new_pos
+            if action != 'Stay':
+                self.agent_pos = new_pos
 
         tuple_pos = tuple(self.agent_pos)
         if tuple_pos in self.food_positions:
             self.food_positions.remove(tuple_pos)
             self.score += 20
             
-        # STEP 2.3 (Logic): Penalize 15 points if agent steps on a toxic trap
         if tuple_pos in self.toxic_traps:
             self.score -= 15
 
