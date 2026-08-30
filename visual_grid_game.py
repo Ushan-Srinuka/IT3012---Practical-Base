@@ -1,14 +1,14 @@
 import random
 import tkinter as tk
-from agent import SearchAgent  # Import the new SearchAgent
+from agent import SearchAgent  # Import the SearchAgent
 
 class VisualGridHuntGame:
-    """A flexible Pacman-style grid environment updated for Uninformed Search."""
+    """A flexible Pacman-style grid environment updated for Search."""
 
     def __init__(self, width=10, height=10, num_food=10, num_opponents=2, custom_walls=None, num_traps=3):
         self.width = width
         self.height = height
-        self.agent_pos = [0, 0]  # Starting position (x, y)
+        self.agent_pos = [0, 0]  
         self.agent_facing = 'Up'
 
         if custom_walls is not None:
@@ -45,7 +45,6 @@ class VisualGridHuntGame:
         self.collision = False
 
     def get_percept(self) -> dict:
-        """Step 1.1: Exposing the World Model"""
         ax, ay = self.agent_pos
         
         if self.agent_facing == 'Up':
@@ -59,14 +58,13 @@ class VisualGridHuntGame:
             
         wall_ahead = ahead_pos in self.walls or not (0 <= ahead_pos[0] < self.width and 0 <= ahead_pos[1] < self.height)
         
-        # Add the three new keys to pass the global state[cite: 8]
         return {
             'wall_ahead': wall_ahead,
             'food_here': tuple(self.agent_pos) in self.food_positions,
             'agent_pos': list(self.agent_pos),
-            'grid_size': (self.width, self.height),     # Global width & height[cite: 8]
-            'walls': list(self.walls),                  # Global walls[cite: 8]
-            'all_food': list(self.food_positions)       # Global food positions[cite: 8]
+            'grid_size': (self.width, self.height),     
+            'walls': list(self.walls),                  
+            'all_food': list(self.food_positions)       
         }
 
     def execute_action(self, action: str):
@@ -127,7 +125,7 @@ class GridGameGUI:
 
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents, custom_walls=walls)
         
-        # Inject the newly created SearchAgent[cite: 8]
+        # Inject the SearchAgent which now uses A*[cite: 9]
         self.agent = SearchAgent()
 
         max_canvas_dim = 600
@@ -203,7 +201,6 @@ class GridGameGUI:
 
         def step():
             if not self.env.is_done():
-                # Replaced random choice with actual Agent perception and logic[cite: 8]
                 percept = self.env.get_percept()
                 action = self.agent.sense_and_act(percept)
                 self.env.execute_action(action)

@@ -1,4 +1,5 @@
 import random
+import math
 from collections import deque
 import heapq
 
@@ -54,14 +55,22 @@ class ModelBasedAgent:
         return action
 
 class SearchAgent:
-    """Step 1.2 & 1.3 (Lab 3): Uninformed Search Agent[cite: 8]"""
+    """Step 1.2 & 1.3 (Lab 3 & 4): Informed/Uninformed Search Agent"""
     def __init__(self):
         self.plan = []
-        # Observation Task: Change this to 'DFS' or 'UCS' to see different paths![cite: 8]
-        self.active_algo = 'BFS' 
+        # Changed to AStar for Lab 04
+        self.active_algo = 'AStar' 
+
+    # --- Lab 04: Heuristic Functions[cite: 9] ---
+    def manhattan_distance(self, pos, goal):
+        """h(n) = |x_1 - x_2| + |y_1 - y_2|"""
+        return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
+
+    def euclidean_distance(self, pos, goal):
+        """h(n) = sqrt((x_1-x_2)^2 + (y_1-y_2)^2)"""
+        return math.sqrt((pos[0] - goal[0])**2 + (pos[1] - goal[1])**2)
 
     def _get_successors(self, state, grid_size, walls):
-        """Helper function to find valid adjacent moves."""
         x, y = state
         w, h = grid_size
         successors = []
@@ -71,17 +80,55 @@ class SearchAgent:
         if x + 1 < w and (x + 1, y) not in walls: successors.append(('Right', (x + 1, y)))
         return successors
 
+    # --- Lab 04: A* Search[cite: 9] ---
+    def astar_search(self, start_pos, goal_pos, walls, grid_size, heuristic_type='manhattan'):
+        frontier = []
+        reached_states = set()
+        
+        g_cost = 0
+        if heuristic_type == 'manhattan':
+            h_cost = self.manhattan_distance(start_pos, goal_pos)
+        else:
+            h_cost = self.euclidean_distance(start_pos, goal_pos)
+            
+        f_cost = g_cost + h_cost
+        
+        # Priority queue tuple: (f_cost, g_cost, current_pos, path_taken)[cite: 9]
+        heapq.heappush(frontier, (f_cost, g_cost, start_pos, []))
+        
+        while frontier:
+            current_f, current_g, current_pos, path_taken = heapq.heappop(frontier)
+            
+            if current_pos == goal_pos:
+                return path_taken
+                
+            if current_pos in reached_states:
+                continue
+                
+            reached_states.add(current_pos)
+            
+            for action, child_state in self._get_successors(current_pos, grid_size, walls):
+                if child_state not in reached_states:
+                    new_g = current_g + 1
+                    
+                    if heuristic_type == 'manhattan':
+                        new_h = self.manhattan_distance(child_state, goal_pos)
+                    else:
+                        new_h = self.euclidean_distance(child_state, goal_pos)
+                        
+                    new_f = new_g + new_h
+                    heapq.heappush(frontier, (new_f, new_g, child_state, path_taken + [action]))
+                    
+        return []
+
+    # --- Lab 03 Algorithms ---
     def bfs_search(self, start, goal, walls, grid_size):
-        """BFS uses a FIFO queue (deque.popleft())[cite: 8]"""
         frontier = deque([(start, [])])
-        reached = set([start]) # Reached set prevents infinite loops[cite: 8]
+        reached = set([start]) 
         
         while frontier:
             current_state, path = frontier.popleft()
-            
-            if current_state == goal:
-                return path
-                
+            if current_state == goal: return path
             for action, child_state in self._get_successors(current_state, grid_size, walls):
                 if child_state not in reached:
                     reached.add(child_state)
@@ -89,16 +136,12 @@ class SearchAgent:
         return []
 
     def dfs_search(self, start, goal, walls, grid_size):
-        """DFS uses a LIFO stack (list.pop())[cite: 8]"""
         frontier = [(start, [])] 
         reached = set([start])
         
         while frontier:
             current_state, path = frontier.pop()
-            
-            if current_state == goal:
-                return path
-                
+            if current_state == goal: return path
             for action, child_state in self._get_successors(current_state, grid_size, walls):
                 if child_state not in reached:
                     reached.add(child_state)
@@ -106,17 +149,13 @@ class SearchAgent:
         return []
 
     def ucs_search(self, start, goal, walls, grid_size):
-        """UCS uses a Priority Queue (heapq.heappop()) ordered by path cost[cite: 8]"""
         frontier = []
         heapq.heappush(frontier, (0, start, [])) 
         reached = {start: 0} 
         
         while frontier:
             cost, current_state, path = heapq.heappop(frontier)
-            
-            if current_state == goal:
-                return path
-                
+            if current_state == goal: return path
             for action, child_state in self._get_successors(current_state, grid_size, walls):
                 new_cost = cost + 1
                 if child_state not in reached or new_cost < reached[child_state]:
@@ -125,30 +164,29 @@ class SearchAgent:
         return []
 
     def sense_and_act(self, percept: dict) -> str:
-        """Step 1.3: Formulating the Plan[cite: 8]"""
-        # Check if self.plan is empty[cite: 8]
         if not self.plan:
             if not percept['all_food']:
                 return 'Stay'
             
             start_pos = tuple(percept['agent_pos'])
             
-            # Find the closest food pellet from percept['all_food'][cite: 8]
-            closest_food = min(percept['all_food'], key=lambda f: abs(f[0] - start_pos[0]) + abs(f[1] - start_pos[1]))
+            # Lab 04: Use Manhattan distance to find the closest food[cite: 9]
+            closest_food = min(percept['all_food'], key=lambda f: self.manhattan_distance(start_pos, f))
             goal_pos = tuple(closest_food)
             
             walls = set(tuple(w) for w in percept['walls'])
             grid_size = percept['grid_size']
             
-            # Execute the search method matching self.active_algo and store in self.plan[cite: 8]
-            if self.active_algo == 'BFS':
+            # Executing algorithms based on config[cite: 9]
+            if self.active_algo == 'AStar':
+                self.plan = self.astar_search(start_pos, goal_pos, walls, grid_size, 'manhattan')
+            elif self.active_algo == 'BFS':
                 self.plan = self.bfs_search(start_pos, goal_pos, walls, grid_size)
             elif self.active_algo == 'DFS':
                 self.plan = self.dfs_search(start_pos, goal_pos, walls, grid_size)
             elif self.active_algo == 'UCS':
                 self.plan = self.ucs_search(start_pos, goal_pos, walls, grid_size)
                 
-        # Return the first action from the plan using return self.plan.pop(0)[cite: 8]
         if self.plan:
             return self.plan.pop(0)
         else:
